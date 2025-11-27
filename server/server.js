@@ -180,18 +180,26 @@ app.post('/api/accounts/:id/confirmations/act', async (req, res) => {
     }
 
     // Validate each confirmation has required fields
-    for (const conf of confirmations) {
-      if (!conf.id && !conf.confirmationId) {
-        console.error('[Confirmations] Confirmation missing id/confirmationId:', conf);
-        return res.status(400).json({ error: 'Each confirmation must have an id or confirmationId' });
+    for (let i = 0; i < confirmations.length; i++) {
+      const conf = confirmations[i];
+      const hasId = conf.id || conf.confirmationId;
+      const hasKey = conf.key || conf.nonce;
+      
+      console.log(`[Confirmations] Validating conf ${i}:`, { hasId, hasKey, conf });
+      
+      if (! hasId) {
+        return res.status(400).json({ 
+          error: `Confirmation ${i} missing id field. Received: ${JSON.stringify(conf)}` 
+        });
       }
-      if (!conf.key && !conf.nonce) {
-        console.error('[Confirmations] Confirmation missing key/nonce:', conf);
-        return res.status(400).json({ error: 'Each confirmation must have a key or nonce' });
+      if (!hasKey) {
+        return res.status(400).json({ 
+          error: `Confirmation ${i} missing key field. Received: ${JSON.stringify(conf)}` 
+        });
       }
     }
 
-    console.log(`[Confirmations] Acting on ${confirmations.length} confirmations with op: ${op}`);
+    console.log(`[Confirmations] Request validated. Acting on ${confirmations.length} confirmations with op: ${op}`);
     await actOnConfirmations(account, op, confirmations);
     res.json({ success: true });
   } catch (err) {

@@ -112,7 +112,7 @@ function mapAppIdToName(appid) {
 async function fetchItemNameFallback(account, appid, classid, instanceid) {
   try {
     const cookie = getSessionCookieHeader(account);
-    const url = `https://steamcommunity.com/economy/itemclasshover/${appid}/${classid}/${instanceid || 0}?content_only=1&l=english`;
+    const url = `https://steamcommunity.com/economy/itemclasshover/${appid}/${classid}/${instanceid || 0}? content_only=1&l=english`;
     
     const res = await axios.get(url, {
       headers: { 
@@ -124,7 +124,7 @@ async function fetchItemNameFallback(account, appid, classid, instanceid) {
     });
 
     const html = res.data;
-    if (!html || typeof html !== 'string') return null;
+    if (! html || typeof html !== 'string') return null;
 
     const matchH1 = html.match(/<h1[^>]*>([^<]+)<\/h1>/i);
     if (matchH1 && matchH1[1]) return matchH1[1].trim();
@@ -167,7 +167,7 @@ async function fetchAssetDescription(appid, classid, instanceid) {
       iconUrl: desc.icon_url_large || desc.icon_url,
       type: desc.type,
       tradable: desc.tradable !== undefined ? !!desc.tradable : true,
-      marketable: desc.marketable !== undefined ? !!desc.marketable : true
+      marketable: desc.marketable !== undefined ?  !!desc.marketable : true
     };
   } catch (err) {
     return null;
@@ -202,7 +202,7 @@ async function fetchMarketPrice(appid, marketHashName) {
 }
 
 async function enrichItemsWithMarket(account, items) {
-  if (!items || !items.length) return items;
+  if (!items || ! items.length) return items;
 
   const byKey = new Map();
   for (const item of items) {
@@ -214,7 +214,7 @@ async function enrichItemsWithMarket(account, items) {
     try {
       let desc = await fetchAssetDescription(item.appid, item.classid, item.instanceid);
 
-      if (!desc && (!item.name || item.name.trim() === '')) {
+      if (!desc && (! item.name || item.name.trim() === '')) {
          const scrapedName = await fetchItemNameFallback(account, item.appid, item.classid, item.instanceid);
          if (scrapedName) {
              item.name = scrapedName;
@@ -223,13 +223,13 @@ async function enrichItemsWithMarket(account, items) {
       } else if (desc) {
         item.name = desc.name || item.name;
         item.marketHashName = desc.marketHashName || item.name;
-        if (!item.icon && desc.iconUrl) {
+        if (! item.icon && desc.iconUrl) {
           item.icon = `https://steamcommunity-a.akamaihd.net/economy/image/${desc.iconUrl}`;
         }
         item.type = desc.type || item.type;
       }
 
-      if (item.name && !item.marketHashName) {
+      if (item.name && ! item.marketHashName) {
           item.marketHashName = item.name;
       }
 
@@ -330,7 +330,7 @@ async function fetchMobileConfDetails(account, payload) {
   params.set('cid', String(payload.confirmationId || payload.id));
   params.set('ck', String(payload.key || payload.nonce || ''));
 
-  const url = `https://steamcommunity.com/mobileconf/details/${params.get('cid')}?${params.toString()}`;
+  const url = `https://steamcommunity.com/mobileconf/details/${params.get('cid')}? ${params.toString()}`;
 
   const res = await axios.get(url, {
     headers: { ...STEAM_HEADERS, Cookie: cookie },
@@ -375,7 +375,7 @@ async function getRichConfirmationDetails(account, opts) {
   base.html = raw.html;
   base.raw = raw.raw;
 
-  if (!base.html) return base;
+  if (! base.html) return base;
 
   if (base.html.includes('mobileconf_trade_area') || base.html.includes('tradeoffer')) {
       const trade = parseTradeHtml(base.html);
@@ -385,9 +385,9 @@ async function getRichConfirmationDetails(account, opts) {
 
       const sum = (items) => items.reduce((acc, i) => {
           const p = i.price?.median || i.price?.lowest;
-          if(!p) return acc;
+          if(! p) return acc;
           const val = parseFloat(p.replace(/[^\d.,]/g, '').replace(',', '.'));
-          return !isNaN(val) ? acc + val : acc;
+          return ! isNaN(val) ? acc + val : acc;
       }, 0);
 
       return {
