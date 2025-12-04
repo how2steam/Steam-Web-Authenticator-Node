@@ -1,12 +1,10 @@
-
-const crypto = require('crypto');
 const axios = require('axios');
 const { getSessionCookiesForAccount, updateSessionLastUsed } = require('./storage');
 const { getAgent } = require('./proxy');
 
 async function getDevicesFromSettings(account) {
   const saved = getSessionCookiesForAccount(account.id);
-  
+
   if (!saved?.sessionid || !saved?.steamLoginSecure) {
     throw new Error('LOGIN_REQUIRED');
   }
@@ -39,15 +37,16 @@ async function getDevicesFromSettings(account) {
 
     console.log('[Devices] Parsing HTML for device data...');
 
-    const activeDevicesMatch = res.data.match(/data-active_devices="(\[[\s\S]*?\])"/);
-    
+    const html = typeof res.data === 'string' ? res.data : '';
+    const activeDevicesMatch = html.match(/data-active_devices="(\[[\s\S]*?\])"/);
+
     if (!activeDevicesMatch) {
-      console.log('[Devices] No active devices found in page');
-      return [];
+      console.log('[Devices] No active devices found in page, treating as expired session');
+      throw new Error('LOGIN_REQUIRED');
     }
 
     const escapedJson = activeDevicesMatch[1].replace(/&quot;/g, '"').replace(/\\\//g, '/');
-    
+
     let deviceList = [];
     try {
       deviceList = JSON.parse(escapedJson);
@@ -59,14 +58,13 @@ async function getDevicesFromSettings(account) {
 
     updateSessionLastUsed(account.id);
 
-    // Parse and format devices
-    return deviceList.map((dev, idx) => {
+    return deviceList.map((dev) => {
       const name = parseDeviceName(dev.token_description);
       const location = dev.last_seen?.city || dev.last_seen?.country || 'Unknown Location';
       const lastUsed = formatLastUsed(dev.last_seen?.time || dev.time_updated);
 
       return {
-        id: String(dev.token_id), // Use token_id directly - this is what Steam API expects
+        id: String(dev.token_id),
         name,
         location,
         lastUsed,
@@ -74,41 +72,35 @@ async function getDevicesFromSettings(account) {
         raw: dev
       };
     });
-
   } catch (err) {
     console.error('[Devices] Error:', err.message);
+    if (err && err.message === 'LOGIN_REQUIRED') {
+      throw err;
+    }
     return [];
   }
 }
 
-// Alias for compatibility
 async function getAuthorizedDevices(account) {
   return getDevicesFromSettings(account);
 }
 
 function parseDeviceName(description) {
   if (!description) return 'Unknown Device';
-
-  // Extract meaningful name from user agent or device description
-  
-  // Handle Steam Desktop Client
   if (description.includes('DESKTOP-') || description.match(/^[A-Z0-9\-]+$/)) {
     return `Steam Desktop - ${description}`;
   }
 
-  // Handle mobile devices
   if (description.includes('iPhone')) return 'iPhone';
   if (description.includes('iPad')) return 'iPad';
   if (description.includes('Android')) return 'Android Device';
 
-  // Handle browsers from user agent
   if (description.includes('Chrome')) return 'Chrome';
   if (description.includes('Firefox')) return 'Firefox';
   if (description.includes('Safari')) return 'Safari';
   if (description.includes('Edge')) return 'Microsoft Edge';
   if (description.includes('Opera')) return 'Opera';
 
-  // Extract OS
   let os = '';
   if (description.includes('Windows')) os = 'Windows';
   if (description.includes('Mac OS X')) os = 'macOS';
@@ -116,7 +108,6 @@ function parseDeviceName(description) {
   if (description.includes('iOS')) os = 'iOS';
   if (description.includes('Android')) os = 'Android';
 
-  // Extract browser
   let browser = '';
   if (description.includes('Chrome') && !description.includes('Chromium')) browser = 'Chrome';
   if (description.includes('Firefox')) browser = 'Firefox';
@@ -144,30 +135,26 @@ function formatLastUsed(timestamp) {
   if (diffMins < 60) return `${diffMins} minute${diffMins !== 1 ? 's' : ''} ago`;
   if (diffHours < 24) return `${diffHours} hour${diffHours !== 1 ? 's' : ''} ago`;
   if (diffDays < 30) return `${diffDays} day${diffDays !== 1 ? 's' : ''} ago`;
-  
+
   return date.toLocaleDateString();
 }
 
 function classifyDeviceType(name) {
   const lower = (name || '').toLowerCase();
-  
+
   if (lower.includes('iphone') || lower.includes('ipad') || lower.includes('android')) {
     return 'mobile';
   }
-  if (lower.includes('chrome') || lower.includes('firefox') || lower.includes('safari') || 
+  if (lower.includes('chrome') || lower.includes('firefox') || lower.includes('safari') ||
       lower.includes('edge') || lower.includes('opera')) {
     return 'web';
   }
-  if (lower.includes('desktop') || lower.includes('steam') || lower.includes('windows') || 
+  if (lower.includes('desktop') || lower.includes('steam') || lower.includes('windows') ||
       lower.includes('mac') || lower.includes('linux')) {
     return 'desktop';
   }
-  
-  return 'unknown';
-}
 
-function generateDeviceId(name) {
-  return crypto.createHash('sha256').update(String(name) + Math.random()).digest('hex').substring(0, 16);
+  return 'unknown';
 }
 
 async function removeDevice(account, deviceId) {
@@ -207,7 +194,7 @@ async function removeDevice(account, deviceId) {
     );
 
     console.log(`[Device] Remove response status: ${res.status}`);
-    console.log(`[Device] Remove response data:`, res.data);
+    console.log('[Device] Remove response data:', res.data);
 
     updateSessionLastUsed(account.id);
 
@@ -248,7 +235,7 @@ async function removeAllDevices(account) {
       success: results.filter(r => r.success).length === results.length,
       results,
       removed: results.filter(r => r.success).length,
-      failed: results.filter(r => ! r.success).length
+      failed: results.filter(r => !r.success).length
     };
   } catch (err) {
     console.error('[Device] Error:', err.message, err.stack);
@@ -298,12 +285,12 @@ function getSecurityStatus(account) {
     return {
       hasSession: true,
       sessionExpired: false,
-      authenticatorEnabled: ! !(maFile.shared_secret),
-      phoneNumber: ! !(maFile.phone_number || maFile.phone || maFile.phone_verified || maFile.fully_enrolled),
+      authenticatorEnabled: !!maFile.shared_secret,
+      phoneNumber: !!(maFile.phone_number || maFile.phone || maFile.phone_verified || maFile.fully_enrolled),
       phoneNumberValue: maFile.phone_number || maFile.phone || null,
       lastLogin: saved.lastUsed || null,
-      revocationCodeAvailable: ! !(maFile.revocation_code),
-      tradingEnabled: !!(maFile.fully_enrolled)
+      revocationCodeAvailable: !!maFile.revocation_code,
+      tradingEnabled: !!maFile.fully_enrolled
     };
   } catch (err) {
     console.error('[Security] Error:', err.message);

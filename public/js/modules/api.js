@@ -3,12 +3,12 @@ const API_BASE = '';
 export class APIClient {
   static async request(endpoint, options = {}) {
     const url = `${API_BASE}${endpoint}`;
-    
+
     try {
       const response = await fetch(url, {
         headers: {
           'Content-Type': 'application/json',
-          ...options.headers
+          ...(options.headers || {})
         },
         ...options
       });
@@ -63,6 +63,14 @@ export class APIClient {
     return this.get(`/api/accounts/${accountId}/session/validate`);
   }
 
+  static getSessionStatus(accountId) {
+    return this.get(`/api/accounts/${accountId}/session-status`);
+  }
+
+  static getSessionInfo(accountId) {
+    return this.get(`/api/accounts/${accountId}/session-info`);
+  }
+
   static getConfirmations(accountId) {
     return this.get(`/api/accounts/${accountId}/confirmations`);
   }
@@ -76,94 +84,21 @@ export class APIClient {
   }
 
   static async getDevices(steamid) {
-    try {
-      console.log('[API] Fetching devices for steamid:', steamid);
-      
-      const response = await fetch(`/api/security/${steamid}/devices`, {
-        method: 'GET',
-        headers: { 'Content-Type': 'application/json' }
-      });
-      
-      console.log('[API] getDevices response status:', response.status);
-      
-      if (!response.ok) {
-        const data = await response.json();
-        if (response.status === 401) {
-          throw new Error('LOGIN_REQUIRED');
-        }
-        throw new Error(data.error || `HTTP ${response.status}`);
-      }
-      
-      const data = await response.json();
-      console.log('[API] getDevices response data:', data);
-      console.log('[API] getDevices devices array:', data.devices);
-      
-      const devices = Array.isArray(data.devices) ? data.devices : [];
-      console.log('[API] getDevices returning', devices.length, 'devices');
-      
-      return devices;
-    } catch (error) {
-      console.error('[API] getDevices error:', error);
-      throw error;
-    }
+    const data = await this.get(`/api/security/${steamid}/devices`);
+    const devices = Array.isArray(data.devices) ? data.devices : [];
+    return devices;
   }
 
-  static async removeDevice(steamid, deviceId) {
-    try {
-      console.log('[API] Removing device:', deviceId);
-      
-      const response = await fetch(`/api/security/${steamid}/devices/${deviceId}`, {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' }
-      });
-      
-      console.log('[API] removeDevice response status:', response.status);
-      
-      if (!response.ok) {
-        const data = await response.json();
-        if (response.status === 401) {
-          throw new Error('LOGIN_REQUIRED');
-        }
-        throw new Error(data.error || `HTTP ${response.status}`);
-      }
-      
-      const data = await response.json();
-      console.log('[API] removeDevice response:', data);
-      
-      return data;
-    } catch (error) {
-      console.error('[API] removeDevice error:', error);
-      throw error;
-    }
+  static removeDevice(steamid, deviceId) {
+    return this.request(`/api/security/${steamid}/devices/${deviceId}`, {
+      method: 'DELETE'
+    });
   }
 
-  static async removeAllDevices(steamid) {
-    try {
-      console.log('[API] Removing all devices');
-      
-      const response = await fetch(`/api/security/${steamid}/devices/all`, {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' }
-      });
-      
-      console.log('[API] removeAllDevices response status:', response.status);
-      
-      if (!response.ok) {
-        const data = await response.json();
-        if (response.status === 401) {
-          throw new Error('LOGIN_REQUIRED');
-        }
-        throw new Error(data.error || `HTTP ${response.status}`);
-      }
-      
-      const data = await response.json();
-      console.log('[API] removeAllDevices response:', data);
-      
-      return data;
-    } catch (error) {
-      console.error('[API] removeAllDevices error:', error);
-      throw error;
-    }
+  static removeAllDevices(steamid) {
+    return this.request(`/api/security/${steamid}/devices/all`, {
+      method: 'DELETE'
+    });
   }
 
   static setupLogin(username, password) {
@@ -192,5 +127,9 @@ export class APIClient {
 
   static finalize2FA(setupId, smsCode) {
     return this.post('/api/setup/finalize', { setupId, smsCode });
+  }
+
+  static getSecurityStatus(accountId) {
+    return this.get(`/api/accounts/${accountId}/security-status`);
   }
 }
